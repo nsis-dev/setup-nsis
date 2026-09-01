@@ -1,7 +1,7 @@
 # setup-nsis
 
 ![License](https://img.shields.io/github/license/nsis-dev/setup-nsis?color=blue&style=for-the-badge)
-![Tag](https://img.shields.io/github/v/tag/nsis-dev/setup-nsis?style=for-the-badge)
+![Release](https://img.shields.io/github/v/release/nsis-dev/setup-nsis?style=for-the-badge)
 ![CI](https://img.shields.io/github/actions/workflow/status/nsis-dev/setup-nsis/ci.yml?style=for-the-badge)
 
 Set up [NSIS](https://nsis.sourceforge.io/) in your GitHub workflow.
