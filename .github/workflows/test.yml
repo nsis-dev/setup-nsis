@@ -1,0 +1,77 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.variant }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        variant: [default, large-strings, advanced-logging]
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: nsis
+        uses: ./
+        with:
+          large-strings: ${{ matrix.variant == 'large-strings' }}
+          advanced-logging: ${{ matrix.variant == 'advanced-logging' }}
+
+      - name: Check outputs, env and build flags
+        shell: bash
+        env:
+          LARGE: ${{ matrix.variant == 'large-strings' }}
+          LOG: ${{ matrix.variant == 'advanced-logging' }}
+          OUT_VERSION: ${{ steps.nsis.outputs.version }}
+          OUT_NSISDIR: ${{ steps.nsis.outputs.nsisdir }}
+        run: |
+          set -euo pipefail
+          [ -n "$OUT_VERSION" ]
+          [ "$OUT_NSISDIR" = "$NSISDIR" ]
+          [ -f "$NSISDIR/Include/MUI2.nsh" ]
+
+          # makensis must come from PATH, i.e. the action put $PREFIX/bin there
+          makensis -VERSION
+          info=$(makensis -HDRINFO)
+          echo "$info"
+
+          strlen=8192
+          [ "$LARGE" = "true" ] || strlen=1024
+          grep -q "NSIS_MAX_STRLEN=$strlen" <<< "$info"
+
+          if [ "$LOG" = "true" ]; then
+            grep -q "NSIS_CONFIG_LOG" <<< "$info"
+          else
+            ! grep -q "NSIS_CONFIG_LOG" <<< "$info"
+          fi
+
+      - name: Compile a script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > test.nsi <<'EOF'
+          OutFile "test.exe"
+          Name "test"
+          Section
+            DetailPrint "hello"
+          SectionEnd
+          EOF
+          makensis test.nsi
+          [ -f test.exe ]
+
+  pinned-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: nsis
+        uses: ./
+        with:
+          version: "3.10"
+      - shell: bash
+        run: '[ "${{ steps.nsis.outputs.version }}" = "3.10" ] && makensis -VERSION | grep -q 3.10'

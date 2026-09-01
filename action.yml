@@ -1,0 +1,112 @@
+name: Setup NSIS
+description: Build NSIS from source on Linux and macOS and expose it via NSISDIR
+
+inputs:
+  version:
+    description: NSIS version, e.g. 3.12, or "latest"
+    default: latest
+  large-strings:
+    description: Build with NSIS_MAX_STRLEN=8192
+    default: "false"
+  advanced-logging:
+    description: Build with NSIS_CONFIG_LOG=yes
+    default: "false"
+
+outputs:
+  version:
+    description: Resolved NSIS version
+    value: ${{ steps.vars.outputs.version }}
+  nsisdir:
+    description: NSIS installation directory
+    value: ${{ steps.vars.outputs.prefix }}/share/nsis
+
+runs:
+  using: composite
+  steps:
+    - id: vars
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        LARGE: ${{ inputs.large-strings }}
+        LOG: ${{ inputs.advanced-logging }}
+      run: |
+        set -euo pipefail
+        if [ "$VERSION" = latest ]; then
+          # SourceForge has no "latest file" URL; its release JSON names the current one
+          VERSION=$(curl -fsSL "https://sourceforge.net/projects/nsis/best_release.json" \
+            | grep -o 'nsis-[0-9.]*-src\.tar\.bz2' | head -1 | sed 's/^nsis-//;s/-src.*//')
+          [ -n "$VERSION" ] || { echo "could not resolve latest NSIS version"; exit 1; }
+          echo "resolved latest NSIS version: $VERSION"
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "prefix=$HOME/nsis" >> "$GITHUB_OUTPUT"
+        echo "key=nsis-${{ runner.os }}-$VERSION-ls$LARGE-al$LOG" >> "$GITHUB_OUTPUT"
+
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/nsis
+        key: ${{ steps.vars.outputs.key }}
+
+    - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends scons mingw-w64 zlib1g-dev
+
+    # No zlib: macOS ships the headers in the SDK, as Homebrew's own nsis formula relies on
+    - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        brew install scons mingw-w64
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        VERSION: ${{ steps.vars.outputs.version }}
+        LARGE: ${{ inputs.large-strings }}
+        LOG: ${{ inputs.advanced-logging }}
+        PREFIX: ${{ steps.vars.outputs.prefix }}
+      run: |
+        set -euo pipefail
+        base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
+        curl -fsSLO "$base/nsis-$VERSION-src.tar.bz2"
+        curl -fsSLO "$base/nsis-$VERSION.zip"
+        tar xf "nsis-$VERSION-src.tar.bz2"
+        unzip -q "nsis-$VERSION.zip"
+
+        # Prebuilt distribution (Include, Plugins, Examples, ...); stubs get overwritten below
+        mkdir -p "$PREFIX/share/nsis"
+        cp -R "nsis-$VERSION/." "$PREFIX/share/nsis/"
+
+        args=(
+          CC=gcc
+          CXX=g++
+          PREFIX="$PREFIX"
+          SKIPMISC=all
+          SKIPPLUGINS=all
+          SKIPUTILS=all
+          # Don't strip, see https://github.com/Homebrew/homebrew/issues/28718
+          STRIP=0
+          VERSION="$VERSION"
+        )
+        [ "$LARGE" = "true" ] && args+=(NSIS_MAX_STRLEN=8192)
+        [ "$LOG" = "true" ] && args+=(NSIS_CONFIG_LOG=yes)
+
+        # Stubs are rebuilt too: the prebuilt ones don't match the build options above
+        cd "nsis-$VERSION-src"
+        scons install-compiler install-stubs "${args[@]}"
+
+    - shell: bash
+      env:
+        PREFIX: ${{ steps.vars.outputs.prefix }}
+      run: |
+        set -euo pipefail
+        echo "NSISDIR=$PREFIX/share/nsis" >> "$GITHUB_ENV"
+        echo "$PREFIX/bin" >> "$GITHUB_PATH"
+        export NSISDIR="$PREFIX/share/nsis"
+        "$PREFIX/bin/makensis" -VERSION
+        "$PREFIX/bin/makensis" "$NSISDIR/Examples/bigtest.nsi" -XOutfile /dev/null
