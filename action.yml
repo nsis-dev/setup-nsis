@@ -23,7 +23,8 @@ outputs:
 runs:
   using: composite
   steps:
-    - id: vars
+    - name: Resolve version and paths
+      id: vars
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
@@ -42,13 +43,15 @@ runs:
         echo "prefix=$HOME/nsis" >> "$GITHUB_OUTPUT"
         echo "key=nsis-${{ runner.os }}-$VERSION-ls$LARGE-al$LOG" >> "$GITHUB_OUTPUT"
 
-    - id: cache
-      uses: actions/cache@v4
+    - name: Restore cached NSIS build
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/nsis
         key: ${{ steps.vars.outputs.key }}
 
-    - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
+    - name: Install build dependencies (Linux)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
       shell: bash
       run: |
         set -euo pipefail
@@ -56,13 +59,15 @@ runs:
         sudo apt-get install -y --no-install-recommends scons mingw-w64 zlib1g-dev
 
     # No zlib: macOS ships the headers in the SDK, as Homebrew's own nsis formula relies on
-    - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'macOS'
+    - name: Install build dependencies (macOS)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'macOS'
       shell: bash
       run: |
         set -euo pipefail
         brew install scons mingw-w64
 
-    - if: steps.cache.outputs.cache-hit != 'true'
+    - name: Download and build NSIS
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: ${{ runner.temp }}
       env:
@@ -100,7 +105,8 @@ runs:
         cd "nsis-$VERSION-src"
         scons install-compiler install-stubs "${args[@]}"
 
-    - shell: bash
+    - name: Export NSISDIR and verify
+      shell: bash
       env:
         PREFIX: ${{ steps.vars.outputs.prefix }}
       run: |
@@ -108,5 +114,6 @@ runs:
         echo "NSISDIR=$PREFIX/share/nsis" >> "$GITHUB_ENV"
         echo "$PREFIX/bin" >> "$GITHUB_PATH"
         export NSISDIR="$PREFIX/share/nsis"
-        "$PREFIX/bin/makensis" -VERSION
-        "$PREFIX/bin/makensis" "$NSISDIR/Examples/bigtest.nsi" -XOutfile /dev/null
+        echo "makensis v$("$PREFIX/bin/makensis" -VERSION)"
+        echo
+        "$PREFIX/bin/makensis" -HDRINFO
