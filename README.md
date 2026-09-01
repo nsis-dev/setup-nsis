@@ -1,11 +1,13 @@
 # setup-nsis
 
+> Set up [NSIS](https://nsis.sourceforge.io/) in your GitHub workflow.
+
 ![License](https://img.shields.io/github/license/nsis-dev/setup-nsis?color=blue&style=for-the-badge)
 ![Tag](https://img.shields.io/github/v/tag/nsis-dev/setup-nsis?style=for-the-badge)
 ![CI](https://img.shields.io/github/actions/workflow/status/nsis-dev/setup-nsis/ci.yml?style=for-the-badge)
 
-
-> Sets up [NSIS](https://nsis.sourceforge.io/) on Linux and macOS.
+> [!WARNING]
+> This action currently only supports Linux and macOS runners.
 
 ## Usage
 
