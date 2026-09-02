@@ -167,6 +167,6 @@ runs:
         set -euo pipefail
         echo "NSISDIR=$NSISDIR" >> "$GITHUB_ENV"
         echo "$BINDIR" >> "$GITHUB_PATH"
-        echo "makensis v$("$BINDIR/makensis" -VERSION)"
+        echo "makensis $("$BINDIR/makensis" -VERSION)"
         echo
         "$BINDIR/makensis" -HDRINFO
