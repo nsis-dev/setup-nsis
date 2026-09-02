@@ -63,7 +63,7 @@ runs:
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "nsisdir=$nsisdir" >> "$GITHUB_OUTPUT"
         echo "bindir=$bindir" >> "$GITHUB_OUTPUT"
-        echo "key=nsis-${{ runner.os }}-$VERSION-ls$LARGE-al$LOG" >> "$GITHUB_OUTPUT"
+        echo "key=nsis-${{ runner.os }}-$VERSION-largeStrings=$LARGE-advancedLogging=$LOG" >> "$GITHUB_OUTPUT"
 
     - name: Restore cached NSIS build
       id: cache
