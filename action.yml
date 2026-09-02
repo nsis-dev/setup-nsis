@@ -1,6 +1,10 @@
 name: Setup NSIS
 description: Set up NSIS on Linux, macOS and Windows and expose it via NSISDIR
 
+branding:
+  color: purple
+  icon: gift
+
 inputs:
   version:
     description: NSIS version, e.g. 3.12, or "latest"
