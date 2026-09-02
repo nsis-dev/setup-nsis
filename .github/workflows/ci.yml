@@ -39,10 +39,8 @@ jobs:
           [ "$OUT_NSISDIR" = "$NSISDIR" ]
           [ -f "$NSISDIR/Include/MUI2.nsh" ]
 
-          # makensis must come from PATH, i.e. the action put the bin dir there
-          makensis -VERSION
+          # Unqualified: proves the action put the bin dir on PATH
           info=$(makensis -HDRINFO)
-          echo "$info"
 
           strlen=8192
           [ "$LARGE" = "true" ] || strlen=1024
