@@ -6,9 +6,6 @@
 
 Set up [NSIS](https://nsis.sourceforge.io/) in your GitHub workflow.
 
-> [!WARNING]
-> This action currently only supports Linux and macOS runners.
-
 ## Usage
 
 ```yaml
@@ -31,8 +28,13 @@ With build options:
 | Name               | Default  | Description                                                   |
 | ------------------ | -------- | ------------------------------------------------------------- |
 | `version`          | `latest` | NSIS version, e.g. `3.12`. `latest` resolves via SourceForge. |
-| `large-strings`    | `false`  | Build with `NSIS_MAX_STRLEN=8192`.                            |
-| `advanced-logging` | `false`  | Build with `NSIS_CONFIG_LOG=yes`.                             |
+| `large-strings`    | `false`  | `NSIS_MAX_STRLEN=8192`.                                       |
+| `advanced-logging` | `false`  | `NSIS_CONFIG_LOG=yes`.                                        |
+
+> [!NOTE]
+> On Windows, `large-strings` and `advanced-logging` cannot be combined: the
+> action uses upstream's prebuilt special builds and there is no build that
+> ships both. Enabling both fails the step.
 
 ## Outputs
 
@@ -41,8 +43,9 @@ With build options:
 | `version` | Resolved NSIS version.                                    |
 | `nsisdir` | NSIS installation directory (also exported as `NSISDIR`). |
 
-Builds are cached per OS, version and option combination, so only the first run
-pays the compile cost.
+On Linux and macOS, NSIS is built from source; on Windows the action installs
+upstream's prebuilt binaries. Either way the result is cached per OS, version
+and option combination, so only the first run pays the setup cost.
 
 ## License
 
