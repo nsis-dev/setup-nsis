@@ -1,15 +1,15 @@
 name: Setup NSIS
-description: Build NSIS from source on Linux and macOS and expose it via NSISDIR
+description: Set up NSIS on Linux, macOS and Windows and expose it via NSISDIR
 
 inputs:
   version:
     description: NSIS version, e.g. 3.12, or "latest"
     default: latest
   large-strings:
-    description: Build with NSIS_MAX_STRLEN=8192
+    description: NSIS_MAX_STRLEN=8192
     default: "false"
   advanced-logging:
-    description: Build with NSIS_CONFIG_LOG=yes
+    description: NSIS_CONFIG_LOG=yes
     default: "false"
 
 outputs:
@@ -18,7 +18,7 @@ outputs:
     value: ${{ steps.vars.outputs.version }}
   nsisdir:
     description: NSIS installation directory
-    value: ${{ steps.vars.outputs.prefix }}/share/nsis
+    value: ${{ steps.vars.outputs.nsisdir }}
 
 runs:
   using: composite
@@ -32,6 +32,7 @@ runs:
         LOG: ${{ inputs.advanced-logging }}
       run: |
         set -euo pipefail
+
         if [ "$VERSION" = latest ]; then
           # SourceForge has no "latest file" URL; its release JSON names the current one
           VERSION=$(curl -fsSL "https://sourceforge.net/projects/nsis/best_release.json" \
@@ -39,9 +40,30 @@ runs:
           [ -n "$VERSION" ] || { echo "could not resolve latest NSIS version"; exit 1; }
           echo "resolved latest NSIS version: $VERSION"
         fi
+
+        if [ "${{ runner.os }}" = Windows ]; then
+          # Windows uses upstream's prebuilt binaries, and there is no build that
+          # combines both special builds
+          if [ "$LARGE" = "true" ] && [ "$LOG" = "true" ]; then
+            echo "large-strings and advanced-logging cannot be combined on Windows" >&2
+            exit 1
+          fi
+
+          # Forward slashes: usable from bash and from PATH alike
+          prefix=$(cygpath -m "$HOME/nsis")
+          nsisdir=$prefix
+          bindir=$prefix
+        else
+          prefix=$HOME/nsis
+          nsisdir=$prefix/share/nsis
+          bindir=$prefix/bin
+        fi
+
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        echo "prefix=$HOME/nsis" >> "$GITHUB_OUTPUT"
-        echo "key=nsis-${{ runner.os }}-$VERSION-ls$LARGE-al$LOG" >> "$GITHUB_OUTPUT"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "nsisdir=$nsisdir" >> "$GITHUB_OUTPUT"
+        echo "bindir=$bindir" >> "$GITHUB_OUTPUT"
+        echo "key=nsis-${{ runner.os }}-$VERSION-largeStrings=$LARGE-advancedLogging=$LOG" >> "$GITHUB_OUTPUT"
 
     - name: Restore cached NSIS build
       id: cache
@@ -49,6 +71,36 @@ runs:
       with:
         path: ~/nsis
         key: ${{ steps.vars.outputs.key }}
+
+    # Upstream ships prebuilt Windows binaries, including for both special builds,
+    # so there is nothing to compile here
+    - name: Install NSIS (Windows)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        VERSION: ${{ steps.vars.outputs.version }}
+        LARGE: ${{ inputs.large-strings }}
+        LOG: ${{ inputs.advanced-logging }}
+        PREFIX: ${{ steps.vars.outputs.prefix }}
+      run: |
+        set -euo pipefail
+        base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
+        curl -fsSLO "$base/nsis-$VERSION.zip"
+        7z x -y -bso0 "nsis-$VERSION.zip"
+
+        mkdir -p "$PREFIX"
+        cp -R "nsis-$VERSION/." "$PREFIX/"
+
+        # Special builds are overlays: makensis.exe plus matching stubs, no top-level dir
+        variant=""
+        [ "$LARGE" = "true" ] && variant="strlen_8192"
+        [ "$LOG" = "true" ] && variant="log"
+
+        if [ -n "$variant" ]; then
+          curl -fsSLO "$base/nsis-$VERSION-$variant.zip"
+          7z x -y -bso0 -o"$PREFIX" "nsis-$VERSION-$variant.zip"
+        fi
 
     - name: Install build dependencies (Linux)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
@@ -67,7 +119,7 @@ runs:
         brew install scons mingw-w64
 
     - name: Download and build NSIS
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
       shell: bash
       working-directory: ${{ runner.temp }}
       env:
@@ -98,6 +150,7 @@ runs:
           STRIP=0
           VERSION="$VERSION"
         )
+
         [ "$LARGE" = "true" ] && args+=(NSIS_MAX_STRLEN=8192)
         [ "$LOG" = "true" ] && args+=(NSIS_CONFIG_LOG=yes)
 
@@ -108,12 +161,12 @@ runs:
     - name: Export NSISDIR and verify
       shell: bash
       env:
-        PREFIX: ${{ steps.vars.outputs.prefix }}
+        NSISDIR: ${{ steps.vars.outputs.nsisdir }}
+        BINDIR: ${{ steps.vars.outputs.bindir }}
       run: |
         set -euo pipefail
-        echo "NSISDIR=$PREFIX/share/nsis" >> "$GITHUB_ENV"
-        echo "$PREFIX/bin" >> "$GITHUB_PATH"
-        export NSISDIR="$PREFIX/share/nsis"
-        echo "makensis v$("$PREFIX/bin/makensis" -VERSION)"
+        echo "NSISDIR=$NSISDIR" >> "$GITHUB_ENV"
+        echo "$BINDIR" >> "$GITHUB_PATH"
+        echo "makensis $("$BINDIR/makensis" -VERSION)"
         echo
-        "$PREFIX/bin/makensis" -HDRINFO
+        "$BINDIR/makensis" -HDRINFO

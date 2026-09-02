@@ -2,7 +2,9 @@ name: Run tests
 
 on:
   push:
+    paths-ignore: ["**.md", LICENSE]
   pull_request:
+    paths-ignore: ["**.md", LICENSE]
   workflow_dispatch:
 
 jobs:
@@ -12,10 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         variant: [default, large-strings, advanced-logging]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup NSIS
         id: nsis
@@ -37,10 +40,8 @@ jobs:
           [ "$OUT_NSISDIR" = "$NSISDIR" ]
           [ -f "$NSISDIR/Include/MUI2.nsh" ]
 
-          # makensis must come from PATH, i.e. the action put $PREFIX/bin there
-          makensis -VERSION
+          # Unqualified: proves the action put the bin dir on PATH
           info=$(makensis -HDRINFO)
-          echo "$info"
 
           strlen=8192
           [ "$LARGE" = "true" ] || strlen=1024
@@ -66,13 +67,34 @@ jobs:
           makensis test.nsi
           [ -f test.exe ]
 
+  windows-combo-rejected:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup NSIS with both special builds
+        id: nsis
+        continue-on-error: true
+        uses: ./
+        with:
+          large-strings: true
+          advanced-logging: true
+
+      - name: Check the step failed
+        shell: bash
+        run: '[ "${{ steps.nsis.outcome }}" = failure ]'
+
   pinned-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: nsis
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup NSIS
+        id: nsis
         uses: ./
         with:
           version: "3.10"
-      - shell: bash
+
+      - name: Check the pinned version was used
+        shell: bash
         run: '[ "${{ steps.nsis.outputs.version }}" = "3.10" ] && makensis -VERSION | grep -q 3.10'
