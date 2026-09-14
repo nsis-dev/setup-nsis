@@ -39,7 +39,7 @@ runs:
 
         if [ "$VERSION" = latest ]; then
           # SourceForge has no "latest file" URL; its release JSON names the current one
-          VERSION=$(curl -fsSL "https://sourceforge.net/projects/nsis/best_release.json" \
+          VERSION=$(curl -fsSL --retry 5 --retry-connrefused "https://sourceforge.net/projects/nsis/best_release.json" \
             | grep -o 'nsis-[0-9.]*-src\.tar\.bz2' | head -1 | sed 's/^nsis-//;s/-src.*//')
           [ -n "$VERSION" ] || { echo "could not resolve latest NSIS version"; exit 1; }
           echo "resolved latest NSIS version: $VERSION"
@@ -90,7 +90,7 @@ runs:
       run: |
         set -euo pipefail
         base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
-        curl -fsSLO "$base/nsis-$VERSION.zip"
+        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION.zip"
         7z x -y -bso0 "nsis-$VERSION.zip"
 
         mkdir -p "$PREFIX"
@@ -102,7 +102,7 @@ runs:
         [ "$LOG" = "true" ] && variant="log"
 
         if [ -n "$variant" ]; then
-          curl -fsSLO "$base/nsis-$VERSION-$variant.zip"
+          curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION-$variant.zip"
           7z x -y -bso0 -o"$PREFIX" "nsis-$VERSION-$variant.zip"
         fi
 
@@ -134,8 +134,8 @@ runs:
       run: |
         set -euo pipefail
         base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
-        curl -fsSLO "$base/nsis-$VERSION-src.tar.bz2"
-        curl -fsSLO "$base/nsis-$VERSION.zip"
+        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION-src.tar.bz2"
+        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION.zip"
         tar xf "nsis-$VERSION-src.tar.bz2"
         unzip -q "nsis-$VERSION.zip"
 
