@@ -76,6 +76,41 @@ runs:
         path: ~/nsis
         key: ${{ steps.vars.outputs.key }}
 
+    - name: Download and verify NSIS
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        VERSION: ${{ steps.vars.outputs.version }}
+        LARGE: ${{ inputs.large-strings }}
+        LOG: ${{ inputs.advanced-logging }}
+      run: |
+        set -euo pipefail
+        folder="NSIS%20${VERSION%%.*}/$VERSION"
+
+        files=("nsis-$VERSION.zip")
+        if [ "${{ runner.os }}" = Windows ]; then
+          [ "$LARGE" = "true" ] && files+=("nsis-$VERSION-strlen_8192.zip")
+          [ "$LOG" = "true" ] && files+=("nsis-$VERSION-log.zip")
+        else
+          files+=("nsis-$VERSION-src.tar.bz2")
+        fi
+
+        # SourceForge's file feed lists each file's MD5; the files themselves come from a mirror
+        curl -fsSL --retry 5 --retry-connrefused -o nsis-files.rss \
+          "https://sourceforge.net/projects/nsis/rss?path=/$folder"
+
+        for file in "${files[@]}"; do
+          curl -fsSL --retry 5 --retry-connrefused -O \
+            "https://downloads.sourceforge.net/project/nsis/$folder/$file"
+          md5=$(grep -o "/$folder/$file/download\"[^>]*><media:hash algo=\"md5\">[0-9a-f]*" nsis-files.rss \
+            | grep -o '[0-9a-f]\{32\}$' || true)
+          [ -n "$md5" ] || { echo "SourceForge lists no MD5 for $file" >&2; exit 1; }
+          echo "$md5  $file"
+        done > nsis-files.md5
+
+        md5sum -c nsis-files.md5
+
     # Upstream ships prebuilt Windows binaries, including for both special builds,
     # so there is nothing to compile here
     - name: Install NSIS (Windows)
@@ -89,8 +124,6 @@ runs:
         PREFIX: ${{ steps.vars.outputs.prefix }}
       run: |
         set -euo pipefail
-        base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
-        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION.zip"
         7z x -y -bso0 "nsis-$VERSION.zip"
 
         mkdir -p "$PREFIX"
@@ -102,7 +135,6 @@ runs:
         [ "$LOG" = "true" ] && variant="log"
 
         if [ -n "$variant" ]; then
-          curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION-$variant.zip"
           7z x -y -bso0 -o"$PREFIX" "nsis-$VERSION-$variant.zip"
         fi
 
@@ -122,7 +154,7 @@ runs:
         set -euo pipefail
         brew install scons mingw-w64
 
-    - name: Download and build NSIS
+    - name: Build NSIS
       if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
       shell: bash
       working-directory: ${{ runner.temp }}
@@ -133,9 +165,6 @@ runs:
         PREFIX: ${{ steps.vars.outputs.prefix }}
       run: |
         set -euo pipefail
-        base="https://downloads.sourceforge.net/project/nsis/NSIS%20${VERSION%%.*}/$VERSION"
-        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION-src.tar.bz2"
-        curl -fsSL --retry 5 --retry-connrefused -O "$base/nsis-$VERSION.zip"
         tar xf "nsis-$VERSION-src.tar.bz2"
         unzip -q "nsis-$VERSION.zip"
 
