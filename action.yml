@@ -67,7 +67,7 @@ runs:
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "nsisdir=$nsisdir" >> "$GITHUB_OUTPUT"
         echo "bindir=$bindir" >> "$GITHUB_OUTPUT"
-        echo "key=nsis-${{ runner.os }}-$VERSION-largeStrings=$LARGE-advancedLogging=$LOG" >> "$GITHUB_OUTPUT"
+        echo "key=nsis-${{ runner.os }}-stripped-stubs-$VERSION-largeStrings=$LARGE-advancedLogging=$LOG" >> "$GITHUB_OUTPUT"
 
     - name: Restore cached NSIS build
       id: cache
@@ -179,8 +179,9 @@ runs:
           SKIPMISC=all
           SKIPPLUGINS=all
           SKIPUTILS=all
-          # Don't strip, see https://github.com/Homebrew/homebrew/issues/28718
-          STRIP=0
+          # Don't strip makensis, see https://github.com/Homebrew/homebrew/issues/28718;
+          # the Win32 stubs must be stripped, their debug sections break the installers
+          STRIP_CP=0
           VERSION="$VERSION"
         )
 
