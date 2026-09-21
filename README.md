@@ -6,6 +6,12 @@
 
 Set up [NSIS](https://nsis.sourceforge.io/) in your GitHub workflow.
 
+**Features**
+
+- Supports Windows, Linux and macOS runners
+- Support special builds (large strings, logging)
+- Efficient build caching
+
 ## Usage
 
 ```yaml
